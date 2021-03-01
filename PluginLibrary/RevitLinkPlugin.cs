@@ -68,6 +68,7 @@ namespace PluginLibrary
 
             [AddInsParameter(
              VisibleName = "Тип связи",
+               
              AvailableValue = new[] { "Внедрение", "Наложение" },
              Value = "Наложение")]
             public string AttachmentType { get; set; }

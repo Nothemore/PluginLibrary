@@ -5,12 +5,13 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using PluginStandard;
+using System.Drawing;
 
 namespace PluginLibrary
 {
     public class PluginSelectionDialog:Form
     {
-        PluginSelectionDialog(IEnumerable<IPlugin> plugins)
+       public PluginSelectionDialog(IEnumerable<IPlugin> plugins)
         {
             var info = new Label();
             info.Text = "Выберите плагин для настройки";
@@ -25,10 +26,15 @@ namespace PluginLibrary
             var acceptBtn = new Button();
             acceptBtn.Text = "Настройть";
             acceptBtn.Dock = DockStyle.Fill;
+            acceptBtn.Click += (sender, args) => {
+                var configurator = new PluginConfigurationDialog((IPlugin)selector.SelectedItem, true);
+                this.Close();
+                configurator.ShowDialog();
+            };
 
             var container = new TableLayoutPanel();
             container.ColumnCount = 1;
-            container.RowCount = 3;
+            container.RowCount = 4;
             container.Dock = DockStyle.Fill;
             container.Controls.Add(info);
             container.Controls.Add(selector);

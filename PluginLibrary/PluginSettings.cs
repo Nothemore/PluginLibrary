@@ -27,8 +27,11 @@ namespace PluginLibrary
                 var attribute = prop.GetCustomAttribute<AddInsParameter>();
                 if (attribute == null) continue;
                 attribute.PropertyName = prop.Name;
-                if (attribute.ControlType == default(ControlType))
-                    attribute.ControlType = IPluginSettingExtension.GetInputType(prop.PropertyType);
+                if (prop.PropertyType.Name == "Boolean") attribute.ControlType = ControlType.CheckBox;
+                else if (attribute.AvailableValue != null) attribute.ControlType = ControlType.ComboBox;
+                else attribute.ControlType = ControlType.TextBox;
+
+                //attribute.ControlType = IPluginSettingExtension.GetInputType(prop.PropertyType);
                 result.Add(attribute);
             }
             return result;
@@ -120,18 +123,6 @@ namespace PluginLibrary
                     return ControlType.TextBox;
             }
         }
-    }
-
-    public static class AddInsParameterExtensions
-    {
-        public static bool Validate(this AddInsParameter parameter, Func<bool> validateFunc)
-        {
-            return validateFunc();
-
-
-        }
-
-
     }
 
 }

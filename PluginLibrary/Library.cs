@@ -15,10 +15,10 @@ namespace PluginLibrary
 
         static Library()
         {
-            Plugins = new List<IPlugin>();
-         
-
-
+            Plugins = new List<IPlugin>() {
+                new StartingViewPlugin(),
+                new RevitLinkPlugin()
+            };
         }
 
 
@@ -35,16 +35,9 @@ namespace PluginLibrary
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-
-            var isNull = Library.Plugins == null;
-
-            var text = isNull.ToString();
-            TaskDialog.Show("asdas", text);
-
-            Library.Plugins.Add(new TemplateClass());
-            var plugCount = Library.Plugins.Count();
-            TaskDialog.Show("asdas", Library.Plugins.Count().ToString());
-
+            var psd = new PluginSelectionDialog(Library.Plugins);
+            psd.ShowDialog();
+          
             return Result.Succeeded;
 
         }
