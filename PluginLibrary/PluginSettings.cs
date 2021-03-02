@@ -47,7 +47,7 @@ namespace PluginLibrary
             if (type.GetProperties().Length != parameters.Count()) return false;
             foreach (var param in parameters)
             {
-                if (param.Value == null)
+                if (param.Value == null || param.Value ==string.Empty)
                 {
                     param.ErrorMessage = "Значение не задано";
                     result = false;

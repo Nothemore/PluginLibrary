@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Autodesk.Revit.DB;
 using PluginStandard;
+using System.IO;
 
 namespace PluginLibrary
 {
@@ -53,7 +54,19 @@ namespace PluginLibrary
         }
         public bool VerifyValidationParameters(IEnumerable<AddInsParameter> parameters)
         {
-            throw new NotImplementedException();
+            if (!Settings.SetParameters(parameters)) return false;
+            var pathToFamily = parameters.Where(param => param.PropertyName == "PathToFamilyIntoServer").First();
+            if (!File.Exists(pathToFamily.Value))
+            {
+                pathToFamily.ErrorMessage += "Файл не существует";
+                return false;
+            }
+            if (!pathToFamily.Value.Contains(".rfa"))
+            {
+                pathToFamily.ErrorMessage += "Файл не является файлом семейства";
+                return false;
+            }
+            return true;
         }
         public bool ValidateModel(Document doc, ref string report, IEnumerable<AddInsParameter> parameters)
         {

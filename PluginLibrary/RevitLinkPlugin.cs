@@ -8,7 +8,7 @@ using PluginStandard;
 
 namespace PluginLibrary
 {
-   
+
     public class RevitLinkPlugin : IPlugin
     {
         private RevitLinkParameters Settings { get; set; }
@@ -42,12 +42,64 @@ namespace PluginLibrary
         }
         public bool VerifyValidationParameters(IEnumerable<AddInsParameter> parameters)
         {
-            throw new NotImplementedException();
+            return Settings.SetParameters(parameters);
         }
         public bool ValidateModel(Document doc, ref string report, IEnumerable<AddInsParameter> parameters)
         {
-            throw new NotImplementedException();
+            report += "Проверка связанных файлов";
+            if (!Settings.SetParameters(parameters))
+            {
+                report += $"\n\tПараметры проверки не прошли проверку";
+                return false;
+            }
+            var result = true;
+            var linkTypes = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>().ToList();
+            var linkInstances = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>().ToList();
+            var reportPrefix = string.Empty;
+
+            if (Settings.CheckPathType)
+            {
+                reportPrefix = $"Установите значение \"{Settings.PathType}\" у параметра \"Пути\" для следующих связанных файлов Revit:";
+                var pathType = Settings.PathType == "Абсолютный" ? PathType.Absolute : PathType.Relative;
+                var linksWithWrongPathType = linkTypes.Where(linkType => linkType.PathType != pathType);
+                result &= AddMessageToReport(linksWithWrongPathType, reportPrefix, ref report);
+            }
+
+            if (Settings.CheckReferenceType)
+            {
+                reportPrefix = $"Установите тип связи \"{Settings.AttachmentType}\" для следующих связанных файлов Revit:";
+                var attachemntType = Settings.AttachmentType == "Внедрение" ? AttachmentType.Attachment : AttachmentType.Overlay;
+                var linksWithWrongAttachemtType = linkTypes.Where(linkType => linkType.AttachmentType != attachemntType);
+                result &= AddMessageToReport(linksWithWrongAttachemtType, reportPrefix, ref report);
+            }
+
+            if (Settings.CheckPin)
+            {
+                reportPrefix = $"Закрепите булавкой следующие связанные файлы Revit:";
+                Func<RevitLinkInstance, bool> IsWrongFileStatus = (linkInstance) =>
+                {
+                    var linkedFileStatus = doc
+                                            .GetElement(linkInstance.GetTypeId())
+                                            .GetExternalFileReference()
+                                            .GetLinkedFileStatus();
+                    return !(linkedFileStatus == LinkedFileStatus.Invalid || linkedFileStatus == LinkedFileStatus.Unloaded);
+                };
+                var unpinnedLinkIstances = linkInstances.Where(c => IsWrongFileStatus(c) && !c.Pinned);
+                result &= AddMessageToReport(unpinnedLinkIstances, reportPrefix, ref report);
+            }
+            return result;
         }
+
+        internal bool AddMessageToReport<T>(IEnumerable<T> links, string reportPrefix, ref string report)
+            where T : Element
+        {
+            if (links.Count() == 0) return true;
+            report += report + reportPrefix;
+            foreach (var link in links)
+                report += $"\n\t{link.Name}";
+            return false;
+        }
+
 
         internal class RevitLinkParameters : IPluginSettings
         {
@@ -68,7 +120,7 @@ namespace PluginLibrary
 
             [AddInsParameter(
              VisibleName = "Тип связи",
-               
+
              AvailableValue = new[] { "Внедрение", "Наложение" },
              Value = "Наложение")]
             public string AttachmentType { get; set; }

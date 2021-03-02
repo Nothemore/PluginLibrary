@@ -6,12 +6,13 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using PluginStandard;
 using System.Drawing;
+using Autodesk.Revit.DB;
 
 namespace PluginLibrary
 {
-    public class PluginSelectionDialog:Form
+    public class PluginSelectionDialog: System.Windows.Forms.Form
     {
-       public PluginSelectionDialog(IEnumerable<IPlugin> plugins)
+       public PluginSelectionDialog(IEnumerable<IPlugin> plugins,Document doc)
         {
             var info = new Label();
             info.Text = "Выберите плагин для настройки";
@@ -27,8 +28,7 @@ namespace PluginLibrary
             acceptBtn.Text = "Настройть";
             acceptBtn.Dock = DockStyle.Fill;
             acceptBtn.Click += (sender, args) => {
-                var configurator = new PluginConfigurationDialog((IPlugin)selector.SelectedItem, true);
-                this.Close();
+                var configurator = new PluginConfigurationDialog((IPlugin)selector.SelectedItem, true,doc);
                 configurator.ShowDialog();
             };
 

@@ -6,22 +6,25 @@ using System.Threading.Tasks;
 using PluginStandard;
 using System.Windows.Forms;
 using System.Drawing;
+using Autodesk.Revit.DB;
 
 
 
 namespace PluginLibrary
 {
-    class PluginConfigurationDialog : Form
+    class PluginConfigurationDialog : System.Windows.Forms.Form
     {
 
         private List<Label> Errors { get; set; } = new List<Label>();
         private List<ParameterControlBinding> ParamControlBinds { get; set; } = new List<ParameterControlBinding>();
 
 
-        public PluginConfigurationDialog(IPlugin plugin, bool isValidationContext)
+        public PluginConfigurationDialog(IPlugin plugin, bool isValidationContext,Document doc)
         {
             var parameters = isValidationContext ? plugin.GetValidationParameters() : plugin.GetConfigurationParameters();
             if (parameters == null) throw new ArgumentException("Plugin's paramters was empty");
+                   
+
 
             var container = new TableLayoutPanel();
             container.ColumnCount = 3;
@@ -33,16 +36,17 @@ namespace PluginLibrary
                 container.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
             }
 
-
             
-            int i = 0;
+            
 
+
+            int numberOfParam = 0;
             foreach (var param in parameters)
             {
                 var paramName = new Label() { Dock = DockStyle.Fill };
                 paramName.Text = param.VisibleName;
-                Control paramControl = param.CreatControl();
-                var paramError = new Label() { Dock = DockStyle.Fill};
+                System.Windows.Forms.Control paramControl = param.CreatControl();
+                var paramError = new Label() { Dock = DockStyle.Fill };
 
                 var paramControlBinding = new ParameterControlBinding()
                 {
@@ -50,26 +54,89 @@ namespace PluginLibrary
                     InputControl = paramControl,
                     ErrorLabel = paramError
                 };
-                
+
                 ParamControlBinds.Add(paramControlBinding);
-                container.Controls.Add(paramName, 0, i);
-                container.Controls.Add(paramControl, 1, i);
-                container.Controls.Add(paramError, 2, i);
-                i++;
+                container.Controls.Add(paramName, 0, numberOfParam);
+                container.Controls.Add(paramControl, 1, numberOfParam);
+                container.Controls.Add(paramError, 2, numberOfParam);
+                numberOfParam++;
 
             }
-            this.Controls.Add(container);
-            this.Size = container.PreferredSize;
-            this.Load += (sender, args) => { this.Size = container.PreferredSize; };
+
+
+
+
+            var report = new Label();
+            container.RowCount += 1;
+            var acceptBtn = new Button();
+            acceptBtn.Text = isValidationContext ? "Проверить" : "Настройть";
+            acceptBtn.Dock = DockStyle.Fill;
+            acceptBtn.Click += (sender, args) =>
+            {
+                foreach (var param in ParamControlBinds)
+                    param.WriteValueIntoParameter();
+                
+                var succefullyVerified = false;
+                if (isValidationContext) succefullyVerified = plugin.VerifyValidationParameters(parameters);
+                else succefullyVerified = plugin.VerifyConfigurationParameters(parameters);
+
+                report.Text = succefullyVerified.ToString();
+                foreach (var param in ParamControlBinds)
+                    param.DisplayError();
+                if (!succefullyVerified) return;
+             
+            };
+
+            container.Controls.Add(acceptBtn, 1, numberOfParam);
+           for(int i=0;i < container.RowCount;i++)
+                container.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
+
+                    
+
+            var withReportContainer = new TableLayoutPanel();
+            withReportContainer.ColumnCount = 1;
+            withReportContainer.RowCount = 2;
+            withReportContainer.Dock = DockStyle.Fill;
+            withReportContainer.RowStyles.Add(new RowStyle(SizeType.Absolute, container.PreferredSize.Height+20));
+            withReportContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
+            withReportContainer.Controls.Add(container);
+            withReportContainer.Controls.Add(report);
+
+            this.Size = new Size(500,(container.RowCount+withReportContainer.RowCount-1)*32);
+            this.Controls.Add(withReportContainer);
+            //32 - 30(высота строки в container + 2 запаса. Пофиксить волшебные числа ?
+            this.Load += (sender, args) => { this.Size = new Size(500, (container.RowCount + withReportContainer.RowCount - 1) * 32); };
+
         }
 
 
         internal class ParameterControlBinding
         {
             internal AddInsParameter Parameter { get; set; }
-            internal Control InputControl { get; set; }
+            internal System.Windows.Forms.Control InputControl { get; set; }
             internal Label ErrorLabel { get; set; }
+
+            internal void WriteValueIntoParameter()
+            {
+
+                var controlAsTextBox = InputControl as TextBox;
+                if (controlAsTextBox != null) Parameter.Value = controlAsTextBox.Text;
+
+                var controlAsComboBox = InputControl as ComboBox;
+                if (controlAsComboBox != null) Parameter.Value = controlAsComboBox.SelectedItem.ToString();
+
+                var controlAsCheckBox = InputControl as CheckBox;
+                if (controlAsCheckBox != null) Parameter.Value = controlAsCheckBox.Checked.ToString();
+            }
+            internal void DisplayError()
+            {
+                if (Parameter.ErrorMessage == null) Parameter.ErrorMessage = string.Empty;
+                ErrorLabel.Text = Parameter.ErrorMessage;
+                Parameter.ErrorMessage = string.Empty;
+            }
+
         }
+
 
 
 
@@ -79,9 +146,9 @@ namespace PluginLibrary
 
     internal static class AddInsParameterExtensions
     {
-        internal static Control CreatControl(this AddInsParameter parameter)
+        internal static System.Windows.Forms.Control CreatControl(this AddInsParameter parameter)
         {
-            Control paramControl = null;
+            System.Windows.Forms.Control paramControl = null;
             switch (parameter.ControlType)
             {
                 case ControlType.TextBox:

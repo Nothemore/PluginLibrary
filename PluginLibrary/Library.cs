@@ -35,7 +35,7 @@ namespace PluginLibrary
     {
         public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
         {
-            var psd = new PluginSelectionDialog(Library.Plugins);
+            var psd = new PluginSelectionDialog(Library.Plugins,commandData.Application.ActiveUIDocument.Document);
             psd.ShowDialog();
           
             return Result.Succeeded;
@@ -44,5 +44,5 @@ namespace PluginLibrary
     }
 
 
-
+   
 }
