@@ -42,11 +42,22 @@ namespace PluginLibrary
         }
         public bool VerifyValidationParameters(IEnumerable<AddInsParameter> parameters)
         {
-            return Settings.SetParameters(parameters);
+            if (!Settings.SetParameters(parameters)) return false;
+            if (Settings.CheckServerPath && (Settings.ServerName == null || Settings.ServerName == string.Empty))
+            {
+                parameters
+                    .Where(c => c.PropertyName == "ServerName")
+                    .First()
+                    .ErrorMessage = "Не задан путь к серверу";
+                return false;
+            }
+            return true;
+
         }
         public bool ValidateModel(Document doc, ref string report, IEnumerable<AddInsParameter> parameters)
         {
             report += "Проверка связанных файлов";
+
             if (!Settings.SetParameters(parameters))
             {
                 report += $"\n\tПараметры проверки не прошли проверку";
@@ -59,7 +70,7 @@ namespace PluginLibrary
 
             if (Settings.CheckPathType)
             {
-                reportPrefix = $"Установите значение \"{Settings.PathType}\" у параметра \"Пути\" для следующих связанных файлов Revit:";
+                reportPrefix = $"\nУстановите значение \"{Settings.PathType}\" у параметра \"Пути\" для следующих связанных файлов Revit:";
                 var pathType = Settings.PathType == "Абсолютный" ? PathType.Absolute : PathType.Relative;
                 var linksWithWrongPathType = linkTypes.Where(linkType => linkType.PathType != pathType);
                 result &= AddMessageToReport(linksWithWrongPathType, reportPrefix, ref report);
@@ -67,15 +78,16 @@ namespace PluginLibrary
 
             if (Settings.CheckReferenceType)
             {
-                reportPrefix = $"Установите тип связи \"{Settings.AttachmentType}\" для следующих связанных файлов Revit:";
+                reportPrefix = $"\nУстановите тип связи \"{Settings.AttachmentType}\" для следующих связанных файлов Revit:";
                 var attachemntType = Settings.AttachmentType == "Внедрение" ? AttachmentType.Attachment : AttachmentType.Overlay;
                 var linksWithWrongAttachemtType = linkTypes.Where(linkType => linkType.AttachmentType != attachemntType);
                 result &= AddMessageToReport(linksWithWrongAttachemtType, reportPrefix, ref report);
             }
 
+
             if (Settings.CheckPin)
             {
-                reportPrefix = $"Закрепите булавкой следующие связанные файлы Revit:";
+                reportPrefix = $"\nЗакрепите булавкой следующие связанные файлы Revit:";
                 Func<RevitLinkInstance, bool> IsWrongFileStatus = (linkInstance) =>
                 {
                     var linkedFileStatus = doc
@@ -87,6 +99,35 @@ namespace PluginLibrary
                 var unpinnedLinkIstances = linkInstances.Where(c => IsWrongFileStatus(c) && !c.Pinned);
                 result &= AddMessageToReport(unpinnedLinkIstances, reportPrefix, ref report);
             }
+
+            if (Settings.CheckDuplicatedInstance)
+            {
+                reportPrefix = $"\nОбратите внимание, в проекте имеются одинаковые экземпляры связанных файлов:";
+                var duplicatedInstance = linkInstances
+                    .GroupBy(u => u.GetTypeId())
+                    .Where(u => u.Count() > 1)
+                    .Select(u => u.First());
+                //.Select(u => doc.GetElement(u.Key));
+                result &= AddMessageToReport(duplicatedInstance, reportPrefix, ref report);
+            }
+
+            if (Settings.CheckServerPath)
+            {
+                reportPrefix = $"Все связанные файлы Revit должны быть загружены с сервера \"{Settings.ServerName}\".Файлы не соответствующие требованию:";
+                Func<RevitLinkType, bool> IsLoadFromForbiddenSource = (linkType) =>
+                {
+                    var externalFileReference = linkType.GetExternalFileReference();
+                    var linkedFileStatus = externalFileReference.GetLinkedFileStatus();
+                    if (linkedFileStatus == LinkedFileStatus.Invalid || linkedFileStatus == LinkedFileStatus.Unloaded) return false;
+                    var linkedFilePath = ModelPathUtils.ConvertModelPathToUserVisiblePath(externalFileReference.GetPath());
+                    return !(linkedFilePath.ToLower().Contains(Settings.ServerName.ToLower()));
+                };
+
+                var loadFromForbiddenSource = linkTypes.Where(c => IsLoadFromForbiddenSource(c));
+                result &= AddMessageToReport(loadFromForbiddenSource, reportPrefix, ref report);
+            }
+
+            report += $"\nПроверка пройдена успешно - {result}";
             return result;
         }
 
@@ -94,7 +135,7 @@ namespace PluginLibrary
             where T : Element
         {
             if (links.Count() == 0) return true;
-            report += report + reportPrefix;
+            report += reportPrefix;
             foreach (var link in links)
                 report += $"\n\t{link.Name}";
             return false;
@@ -103,6 +144,13 @@ namespace PluginLibrary
 
         internal class RevitLinkParameters : IPluginSettings
         {
+
+            [AddInsParameter(VisibleName = "Проверить, что файл загружен с сервера")]
+            public bool CheckServerPath { get; set; }
+
+            [AddInsParameter(VisibleName = "Проверить дублирования связи")]
+            public bool CheckDuplicatedInstance { get; set; }
+
             [AddInsParameter(VisibleName = "Обработать закрепление")]
             public bool CheckPin { get; set; }
 
@@ -114,16 +162,24 @@ namespace PluginLibrary
 
             [AddInsParameter(
                 VisibleName = "Тип пути",
-                AvailableValue = new[] { "Относительный", "Абсолютный" },
+                AvailableValue = new[] { "Абсолютный","Относительный" },
                 Value = "Абсолютный")]
             public string PathType { get; set; }
 
             [AddInsParameter(
              VisibleName = "Тип связи",
-
-             AvailableValue = new[] { "Внедрение", "Наложение" },
+             AvailableValue = new[] { "Наложение","Внедрение" },
              Value = "Наложение")]
             public string AttachmentType { get; set; }
+
+            [AddInsParameter(
+            VisibleName = "Путь к серверу",
+            Value = @"\\ois-revit1")]
+            public string ServerName { get; set; }
+
+
+
+
         }
 
         #endregion

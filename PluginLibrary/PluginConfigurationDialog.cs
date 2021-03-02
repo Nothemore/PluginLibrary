@@ -19,12 +19,10 @@ namespace PluginLibrary
         private List<ParameterControlBinding> ParamControlBinds { get; set; } = new List<ParameterControlBinding>();
 
 
-        public PluginConfigurationDialog(IPlugin plugin, bool isValidationContext,Document doc)
+        public PluginConfigurationDialog(IPlugin plugin, bool isValidationContext, Document doc)
         {
             var parameters = isValidationContext ? plugin.GetValidationParameters() : plugin.GetConfigurationParameters();
             if (parameters == null) throw new ArgumentException("Plugin's paramters was empty");
-                   
-
 
             var container = new TableLayoutPanel();
             container.ColumnCount = 3;
@@ -35,10 +33,6 @@ namespace PluginLibrary
             {
                 container.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33));
             }
-
-            
-            
-
 
             int numberOfParam = 0;
             foreach (var param in parameters)
@@ -60,52 +54,56 @@ namespace PluginLibrary
                 container.Controls.Add(paramControl, 1, numberOfParam);
                 container.Controls.Add(paramError, 2, numberOfParam);
                 numberOfParam++;
-
             }
 
-
-
-
-            var report = new Label();
+            var report = new TextBox() { Dock = DockStyle.Fill,Multiline = true,ScrollBars = ScrollBars.Both};
+            
+            report.ReadOnly = true;
             container.RowCount += 1;
             var acceptBtn = new Button();
-            acceptBtn.Text = isValidationContext ? "Проверить" : "Настройть";
+            acceptBtn.Text = isValidationContext ? "Проверить" : "Настроить";
             acceptBtn.Dock = DockStyle.Fill;
             acceptBtn.Click += (sender, args) =>
             {
                 foreach (var param in ParamControlBinds)
                     param.WriteValueIntoParameter();
-                
+
                 var succefullyVerified = false;
                 if (isValidationContext) succefullyVerified = plugin.VerifyValidationParameters(parameters);
                 else succefullyVerified = plugin.VerifyConfigurationParameters(parameters);
 
-                report.Text = succefullyVerified.ToString();
                 foreach (var param in ParamControlBinds)
                     param.DisplayError();
                 if (!succefullyVerified) return;
-             
+
+                var tempReport = string.Empty;
+                if (isValidationContext) plugin.ValidateModel(doc, ref tempReport, parameters);
+                else plugin.ConfigurateModel(doc, ref tempReport, parameters);
+
+                report.Text = tempReport.Replace("\n","\r\n");
+                
+                this.Size = new Size(1000, container.RowCount * 35 + report.Lines.Count() * 12+50);
+
+
             };
 
             container.Controls.Add(acceptBtn, 1, numberOfParam);
-           for(int i=0;i < container.RowCount;i++)
+            for (int i = 0; i < container.RowCount; i++)
                 container.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
-
-                    
 
             var withReportContainer = new TableLayoutPanel();
             withReportContainer.ColumnCount = 1;
             withReportContainer.RowCount = 2;
             withReportContainer.Dock = DockStyle.Fill;
-            withReportContainer.RowStyles.Add(new RowStyle(SizeType.Absolute, container.PreferredSize.Height+20));
-            withReportContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
-            withReportContainer.Controls.Add(container);
-            withReportContainer.Controls.Add(report);
+            withReportContainer.RowStyles.Add(new RowStyle(SizeType.Absolute, container.PreferredSize.Height + container.RowCount * 2));
+            withReportContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            withReportContainer.Controls.Add(container, 0, 0);
+            withReportContainer.Controls.Add(report, 0, 1);
 
-            this.Size = new Size(500,(container.RowCount+withReportContainer.RowCount-1)*32);
+            this.Size = new Size(1000, container.RowCount * 35 + 70);
             this.Controls.Add(withReportContainer);
             //32 - 30(высота строки в container + 2 запаса. Пофиксить волшебные числа ?
-            this.Load += (sender, args) => { this.Size = new Size(500, (container.RowCount + withReportContainer.RowCount - 1) * 32); };
+            this.Load += (sender, args) => { this.Size = new Size(1000, container.RowCount * 35 + 70); };
 
         }
 
@@ -153,10 +151,12 @@ namespace PluginLibrary
             {
                 case ControlType.TextBox:
                     paramControl = new TextBox();
+                    paramControl.Text = parameter.Value ?? string.Empty;
                     break;
                 case ControlType.ComboBox:
                     var paramAsCombo = new ComboBox();
                     paramAsCombo.DataSource = parameter.AvailableValue;
+                    
                     //paramAsCombo.SelectedItem = parameter.Value;
                     //paramAsCombo.SelectedIndex = 0;
                     paramControl = paramAsCombo;

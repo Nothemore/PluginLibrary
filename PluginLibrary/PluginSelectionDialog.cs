@@ -25,7 +25,7 @@ namespace PluginLibrary
             selector.Dock = DockStyle.Fill;
 
             var acceptBtn = new Button();
-            acceptBtn.Text = "Настройть";
+            acceptBtn.Text = "Настроить";
             acceptBtn.Dock = DockStyle.Fill;
             acceptBtn.Click += (sender, args) => {
                 var configurator = new PluginConfigurationDialog((IPlugin)selector.SelectedItem, true,doc);

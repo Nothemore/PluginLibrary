@@ -70,7 +70,7 @@ namespace PluginLibrary
                             if (int.TryParse(param.Value, out parseInt))
                                 prop.SetValue(settings, parseInt);
                             else
-                                param.ErrorMessage = "Задано некорректное значение";
+                                param.ErrorMessage = "Не является целым числом";
                             break;
                         case "Double":
                             double parseDouble = 0;
@@ -78,7 +78,7 @@ namespace PluginLibrary
                                 prop.SetValue(settings, double.Parse(param.Value));
                             else
                             {
-                                param.ErrorMessage = "Задано некорректное значение";
+                                param.ErrorMessage = "Не является числом с плавающей точкой";
                                 result = false;
                             }
                             break;
