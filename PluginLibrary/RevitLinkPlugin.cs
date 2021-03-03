@@ -65,29 +65,29 @@ namespace PluginLibrary
             }
             var result = true;
             var linkTypes = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkType)).Cast<RevitLinkType>().ToList();
-            var linkInstances = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>().ToList();
-            var reportPrefix = string.Empty;
+            var linkInstances = new FilteredElementCollector(doc).OfClass(typeof(RevitLinkInstance)).Cast<RevitLinkInstance>().Where(c=>c.Name.Contains("rvt")).ToList();
+            var messageTitle = string.Empty;
 
             if (Settings.CheckPathType)
             {
-                reportPrefix = $"\nУстановите значение \"{Settings.PathType}\" у параметра \"Пути\" для следующих связанных файлов Revit:";
+                messageTitle = $"\nУстановите значение \"{Settings.PathType}\" у параметра \"Пути\" для следующих связанных файлов Revit:";
                 var pathType = Settings.PathType == "Абсолютный" ? PathType.Absolute : PathType.Relative;
                 var linksWithWrongPathType = linkTypes.Where(linkType => linkType.PathType != pathType);
-                result &= AddMessageToReport(linksWithWrongPathType, reportPrefix, ref report);
+                result &= AddMessageToReport(linksWithWrongPathType, messageTitle, ref report);
             }
 
             if (Settings.CheckReferenceType)
             {
-                reportPrefix = $"\nУстановите тип связи \"{Settings.AttachmentType}\" для следующих связанных файлов Revit:";
+                messageTitle = $"\nУстановите тип связи \"{Settings.AttachmentType}\" для следующих связанных файлов Revit:";
                 var attachemntType = Settings.AttachmentType == "Внедрение" ? AttachmentType.Attachment : AttachmentType.Overlay;
                 var linksWithWrongAttachemtType = linkTypes.Where(linkType => linkType.AttachmentType != attachemntType);
-                result &= AddMessageToReport(linksWithWrongAttachemtType, reportPrefix, ref report);
+                result &= AddMessageToReport(linksWithWrongAttachemtType, messageTitle, ref report);
             }
 
 
             if (Settings.CheckPin)
             {
-                reportPrefix = $"\nЗакрепите булавкой следующие связанные файлы Revit:";
+                messageTitle = $"\nЗакрепите булавкой следующие связанные файлы Revit:";
                 Func<RevitLinkInstance, bool> IsWrongFileStatus = (linkInstance) =>
                 {
                     var linkedFileStatus = doc
@@ -97,23 +97,23 @@ namespace PluginLibrary
                     return !(linkedFileStatus == LinkedFileStatus.Invalid || linkedFileStatus == LinkedFileStatus.Unloaded);
                 };
                 var unpinnedLinkIstances = linkInstances.Where(c => IsWrongFileStatus(c) && !c.Pinned);
-                result &= AddMessageToReport(unpinnedLinkIstances, reportPrefix, ref report);
+                result &= AddMessageToReport(unpinnedLinkIstances, messageTitle, ref report);
             }
 
             if (Settings.CheckDuplicatedInstance)
             {
-                reportPrefix = $"\nОбратите внимание, в проекте имеются одинаковые экземпляры связанных файлов:";
+                messageTitle = $"\nОбратите внимание, в проекте имеются одинаковые экземпляры связанных файлов:";
                 var duplicatedInstance = linkInstances
                     .GroupBy(u => u.GetTypeId())
                     .Where(u => u.Count() > 1)
                     .Select(u => u.First());
                 //.Select(u => doc.GetElement(u.Key));
-                result &= AddMessageToReport(duplicatedInstance, reportPrefix, ref report);
+                result &= AddMessageToReport(duplicatedInstance, messageTitle, ref report);
             }
 
             if (Settings.CheckServerPath)
             {
-                reportPrefix = $"Все связанные файлы Revit должны быть загружены с сервера \"{Settings.ServerName}\".Файлы не соответствующие требованию:";
+                messageTitle = $"\nВсе связанные файлы Revit должны быть загружены с сервера \"{Settings.ServerName}\".Файлы не соответствующие требованию:";
                 Func<RevitLinkType, bool> IsLoadFromForbiddenSource = (linkType) =>
                 {
                     var externalFileReference = linkType.GetExternalFileReference();
@@ -124,18 +124,43 @@ namespace PluginLibrary
                 };
 
                 var loadFromForbiddenSource = linkTypes.Where(c => IsLoadFromForbiddenSource(c));
-                result &= AddMessageToReport(loadFromForbiddenSource, reportPrefix, ref report);
+                result &= AddMessageToReport(loadFromForbiddenSource, messageTitle, ref report);
+            }
+
+            if (Settings.CheckBasePointMatching)
+            {
+                messageTitle = $"\nБазовая точка  связном файлен не совпадает с базовой точкой проекта.Проверьте расположение связных файлов:";
+                Func<Document, XYZ> GetBasePoint = (document) =>
+                     {
+                         return new FilteredElementCollector(document)
+                       .OfClass(typeof(BasePoint))
+                       .Cast<BasePoint>()
+                       .Where(c => !c.IsShared)
+                       .First()
+                       .get_BoundingBox(null)
+                       .Max;
+                     };
+                var projectBasePointCoordinate = GetBasePoint(doc);
+                Func<RevitLinkInstance, bool> IsBasePointMismatched = (linkInstance) =>
+                {
+                    var linkTransform = linkInstance.GetTotalTransform();
+                    var linkBasePoint = GetBasePoint(linkInstance.GetLinkDocument());
+                    var linkPointBaseIntoProjectCoordinate = linkTransform.OfPoint(linkBasePoint);
+                    return !projectBasePointCoordinate.IsAlmostEqualTo(linkPointBaseIntoProjectCoordinate);
+                };
+                var basePointMismatchedLinks = linkInstances.Where(c => IsBasePointMismatched(c));
+                result &= AddMessageToReport(basePointMismatchedLinks, messageTitle, ref report);
             }
 
             report += $"\nПроверка пройдена успешно - {result}";
             return result;
         }
 
-        internal bool AddMessageToReport<T>(IEnumerable<T> links, string reportPrefix, ref string report)
+        internal bool AddMessageToReport<T>(IEnumerable<T> links, string messageTitle, ref string report)
             where T : Element
         {
             if (links.Count() == 0) return true;
-            report += reportPrefix;
+            report += messageTitle;
             foreach (var link in links)
                 report += $"\n\t{link.Name}";
             return false;
@@ -151,6 +176,9 @@ namespace PluginLibrary
             [AddInsParameter(VisibleName = "Проверить дублирования связи")]
             public bool CheckDuplicatedInstance { get; set; }
 
+            [AddInsParameter(VisibleName = "Обработать совпадение базовой точки")]
+            public bool CheckBasePointMatching { get; set; }
+
             [AddInsParameter(VisibleName = "Обработать закрепление")]
             public bool CheckPin { get; set; }
 
@@ -162,13 +190,13 @@ namespace PluginLibrary
 
             [AddInsParameter(
                 VisibleName = "Тип пути",
-                AvailableValue = new[] { "Абсолютный","Относительный" },
+                AvailableValue = new[] { "Абсолютный", "Относительный" },
                 Value = "Абсолютный")]
             public string PathType { get; set; }
 
             [AddInsParameter(
              VisibleName = "Тип связи",
-             AvailableValue = new[] { "Наложение","Внедрение" },
+             AvailableValue = new[] { "Наложение", "Внедрение" },
              Value = "Наложение")]
             public string AttachmentType { get; set; }
 
@@ -176,10 +204,6 @@ namespace PluginLibrary
             VisibleName = "Путь к серверу",
             Value = @"\\ois-revit1")]
             public string ServerName { get; set; }
-
-
-
-
         }
 
         #endregion
