@@ -17,11 +17,10 @@ namespace PluginLibrary
         {
             Plugins = new List<IPlugin>() {
                 new StartingViewPlugin(),
-                new RevitLinkPlugin()
+                new RevitLinkPlugin(),
+                new NavisworksPlugin()
             };
         }
-
-
     }
 
 
